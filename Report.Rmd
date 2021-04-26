@@ -1,0 +1,284 @@
+---
+title: "Factors Affecting Salary"
+author: "Stephen O'Dea"
+date: "4/30/2021"
+output: pdf_document
+bibliography: references.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+                    ### IMPORT LIBRARIES ###
+library(tidyverse)
+library(scales)
+library(RColorBrewer)
+library(ggthemes)
+library(knitr)
+
+                    ### IMPORT DATA ###
+salary_by_major <- read_csv("C:/Users/campb/Desktop/degrees-that-pay-back.csv")
+salary_by_type <- read_csv("C:/Users/campb/Desktop/salaries-by-college-type.csv", 
+                                     col_types = cols(`Mid-Career 10th Percentile Salary` = col_double(), 
+                                                      `Mid-Career 90th Percentile Salary` = col_double()))
+salary_by_region <- read_csv("C:/Users/campb/Desktop/salaries-by-region.csv",
+                             col_types = cols(`Mid-Career 10th Percentile Salary` = col_double(),
+                                              `Mid-Career 90th Percentile Salary` = col_double()))
+
+                    ### SET PROJECT THEME ###
+theme_set(theme_bw())
+```
+
+## Introduction
+
+Ellucian, a company that creates software and services to power higher education, published a survey about the career path of students. In the survey, it is shown that students are not confident in choosing their major, and that approximately two-thirds of them found the process too overwhelming [@R-base].
+
+The inability to choose the right major may have serious ramifications. It may cause students to switch career paths without fully understanding the implications. It may also cause them to take irrelevant course work, leading to a unnecessarily prolonged and expensive college experience. Most importantly, one may be pidgen-holed into a career they are unhappy with.
+
+It is to the benefit of all college prospects to be able to make informed decisions about their choice of college and what type of career to pursue. This paper aims to provide some objectivity towards the subject. The data analyzed is from a 2010 survey from Payscale Inc. The dataset shows the 10th, 25th, 50th, 75th, 90th, and entry level salary for 50 different majors based on school, school type, and location (split into 5 regions)
+
+The data was extracted from Kaggle. For more information on the original source of the data, variable dictionary, and an overview of the variables, visit the following link: <https://www.kaggle.com/wsj/college-salaries>.
+
+## Data Exploration and Summary Statistics
+
+There is a total of `r 50*8 + 320*8 + 269*8` total observations between the three dataframes. 
+
+```{r summary_stats, echo = FALSE}
+table1 <- salary_by_major %>%
+  select(-`Undergraduate Major`) %>%
+  summary()
+
+kable(table1, caption = "Salaries Aggregated by Major")
+
+table2 <- salary_by_type %>%
+  select(-`School Name`, -`School Type`) %>%
+  summary()
+
+kable(table2, caption = "Salaries Aggregated by Type")
+
+table3 <- salary_by_region %>%
+  select(-`School Name`, -Region) %>%
+  summary()
+
+kable(table3, caption = "Salaries Aggregated by Region")
+```
+
+```{r proportions, echo = FALSE}
+table4 <- salary_by_type %>%
+  select(`School Type`) %>%
+  table() %>%
+  prop.table()
+
+knitr::kable(table4)
+
+table5 <- salary_by_region %>%
+  select(Region) %>%
+  table() %>%
+  prop.table()
+
+knitr::kable(table5)
+```
+
+As expected, there exists a large range of salaries. Furthermore, note the skewness in the distribution of school types. State schools account for more than 65% of the observations. Lastly, it is interesting that California was given its own region. Though it is the least represented , bare in mind that it is the culmination of only one state.
+
+## Visualizations
+
+### Degrees That Pay Back
+
+```{r plot_1 data, include = FALSE}
+salary_by_major %>%
+  ggplot() +
+  geom_bar(stat = "identity", aes(x = reorder(`Undergraduate Major`, `Mid-Career 90th Percentile Salary`), y = `Mid-Career 90th Percentile Salary`, fill = "90th Percentile", color = "grey90")) +
+  geom_bar(stat = "identity", aes(x = `Undergraduate Major`, y = `Mid-Career 75th Percentile Salary`, fill = "75th Percentile")) +
+  geom_bar(stat = "identity", aes(x = `Undergraduate Major`, y = `Mid-Career Median Salary`, fill = "50th Percentile")) +
+  geom_bar(stat = "identity", aes(x = `Undergraduate Major`, y = `Mid-Career 25th Percentile Salary`, fill = "25th Percentile")) +
+  geom_bar(stat = "identity", aes(x = `Undergraduate Major`, y = `Mid-Career 10th Percentile Salary`, fill = "10th Percentile")) +
+  geom_point(aes(x = `Undergraduate Major`, y = `Starting Median Salary`, color = "black")) +
+  scale_color_identity() +
+  coord_flip() +
+  scale_fill_brewer(palette = "Blues") +
+  scale_y_continuous(labels = dollar_format(),
+                     expand = c(0,0)) +
+  guides(color = FALSE) +
+  labs(subtitle = "Dot Represents Entry Level Salary",
+       x = "",
+       y = "Salary (USD)") +
+  theme(legend.title = element_blank(),
+        legend.position = "right",
+        axis.text.y = element_text(hjust = 0.95, size = 7),
+        axis.title.x = element_text(vjust = -0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) -> plot1
+```
+
+```{r plot1, echo = FALSE}
+plot1
+```
+
+There are some interesting things to point out about this data. First, the best degrees in terms of mid-career salaries goes to most of the STEM majors (predominately the types of engineering) as well as economics and finance. Furthermore, these careers exhibited some of the highest pay increases.
+
+In terms of fresh out of school, the degree with the highest entry level salary is Physician Assistant. This job starts at $73,000, but only has an earning power of roughly 23%. A similar circumstance can be seen for Nursing, which ranks low when aggregated by 90th percentile salaries.
+
+### Where It Pays to Attend School
+
+```{r plot2_data, include = FALSE}
+salary_by_type %>%
+  arrange(desc(`Mid-Career Median Salary`)) %>%
+  mutate(School = str_to_title(`School Name`),
+         School = fct_reorder(School, `Mid-Career Median Salary`)) %>%
+  drop_na() %>%
+  head(20) %>%
+  ggplot(aes(x = School,
+             ymin = `Mid-Career 10th Percentile Salary`,
+             lower = `Mid-Career 25th Percentile Salary`,
+             middle = `Mid-Career Median Salary`,
+             upper = `Mid-Career 75th Percentile Salary`,
+             ymax = `Mid-Career 90th Percentile Salary`,
+             fill = `School Type`,
+             color = `School Type`)) +
+  geom_boxplot(stat = "identity", alpha = 0.4) +
+  scale_fill_brewer(palette = "Set1") +
+  scale_color_brewer(palette = "Set1") +
+  expand_limits(y = 50000) +
+  scale_y_continuous(labels = dollar_format()) +
+  coord_flip() +
+  labs(subtitle = "Top 20 Schools Aggregated by School Type",
+       x = "",
+       y = "Salary (USD)") +
+  theme(axis.text.y = element_text(hjust = 0.95, vjust = 0.2),
+        axis.title.x = element_text(vjust = -0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right") -> plot2
+```
+
+```{r plot2, echo = FALSE}
+plot2
+```
+
+As shown, ivy league schools exhibit the highest salaries with many engineering schools in the top 20 as well. However, consider the distribution of these two school types. The interquartile range for the engineering colleges is much smaller than the interquartile range for the ivy league schools. This is likely caused from the types of degrees offered at these schools.
+
+Furthermore, since 83% of the observations in the data are comprised of state and liberal arts colleges, it is quite interesting to see only 4 observations from these groups make the top 20. Lastly, and not as surprising, no party schools are represented in the graph.
+
+### Best Places to Live
+
+```{r plot_3 data, include = FALSE}
+# EXTRACT MAP DATA FROM GGPLOT
+us_map <- map_data("state") %>% as_tibble()
+
+# CREATE MAPPING FOR STATE AND REGION
+tmp <- data.frame(state = c("california", "illinois", "indiana", "iowa", "kansas", "michigan", "minnesota", "missouri", "nebraska",
+                            "north dakota", "ohio", "south dakota", "wisconsin", "connecticut", "delaware", "maine",
+                            "massachusetts", "maryland", "district of columbia", "new hampshire", "new jersey", "new york", "pennsylvania",
+                            "rhode island", "vermont", "alabama", "arkansas", "florida", "georgia", "kentucky", "louisiana",
+                            "mississippi", "north carolina", "oklahoma", "south carolina", "tennessee", "texas",
+                            "virginia", "west virginia", "arizona", "colorado", "idaho", "montana", "nevada",
+                            "new mexico", "oregon", "utah", "washington", "wyoming"),
+                  Region = c("California", "Midwestern", "Midwestern", "Midwestern", "Midwestern", "Midwestern", "Midwestern",
+                             "Midwestern", "Midwestern", "Midwestern", "Midwestern", "Midwestern", "Midwestern", "Northeastern", "Northeastern",
+                             "Northeastern", "Northeastern", "Northeastern", "Northeastern", "Northeastern", "Northeastern", "Northeastern", "Northeastern",
+                             "Northeastern", "Northeastern", "Southern", "Southern", "Southern", "Southern", "Southern", "Southern", "Southern",
+                             "Southern", "Southern", "Southern", "Southern", "Southern", "Southern", "Southern", "Western", "Western",
+                             "Western", "Western", "Western", "Western", "Western", "Western", "Western", "Western")) %>% as_tibble()
+
+# WRANGLE SALARY_BY_REGION AND MERGE WITH TMP
+salary_by_region1 <- salary_by_region %>%
+  group_by(Region) %>%
+  summarise(mid_career_median_salary = median(`Mid-Career Median Salary`))
+
+salary_by_region1 <- tmp %>%
+  left_join(salary_by_region1, by = "Region")
+
+# MERGE SALARY_BY_REGION AND US_MAP
+salary_by_region_map <- us_map %>%
+  left_join(salary_by_region1, by = c("region" = "state"))
+
+plot3 <- salary_by_region_map %>%
+  ggplot(aes(long, lat, group = subregion)) +
+  coord_map("ortho",
+            orientation = c(39, -98, 0)) +
+  geom_polygon(aes(group = group, fill = mid_career_median_salary, color = Region)) +
+  scale_fill_distiller(name = "Median Salary", palette = "Blues", labels = dollar_format(),
+                       breaks = c(77800, 80000, 88000, 91550)) +
+  theme_minimal() +
+  guides(color = guide_legend(override.aes = list(fill = "white")),
+         fill=guide_legend(byrow=TRUE)) +
+  labs(x = "",
+       y = "",
+       fill = "") +
+  theme_map() +
+  theme(legend.position="bottom",
+        legend.box="vertical",
+        legend.margin=margin(),
+        legend.justification = "center")
+```
+
+```{r plot3, echo = FALSE}
+plot3
+```
+
+The regions that have the highest median salaries are California and the northeast. However, the results of the choropleth can be improved upon. Not all college prospects are willing to relocate or are able to attend any type of school. By joining the salary_by_region and salary_by_type datasets, the same analysis can be performed while aggregating by school type. This will allow students to visualize the best type of school for their respective region.
+
+```{r plot4_data, include = FALSE}
+plot4 <- salary_by_region %>%
+  left_join(salary_by_type) %>%
+  drop_na() %>%
+  group_by(Region, `School Type`) %>%
+  summarise(mean = mean(`Mid-Career Median Salary`)) %>%
+  ggplot(aes(`School Type`, mean, fill = Region)) + 
+    geom_col(alpha = 0.8, position = 'dodge', color = "#000000") +
+    scale_fill_brewer(palette = 'Pastel1') +
+    coord_flip() +
+    scale_y_continuous(labels = dollar_format()) +
+    labs(subtitle = "Best Region for Each School Type",
+         y = "Salary (USD)") +
+  theme(axis.text.y = element_text(hjust = 0.95, vjust = 0.2),
+        axis.title.x = element_text(vjust = -0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right")
+```
+
+```{r plot4, echo = FALSE}
+plot4
+```
+
+The best region for each school type is listed below.
+
+```{r table6_data, include = FALSE}
+table6 <- salary_by_region %>%
+  left_join(salary_by_type) %>%
+  drop_na() %>%
+  group_by(`School Type`, Region) %>%
+  summarise(`Average Salary` = mean(`Mid-Career Median Salary`)) %>%
+  filter(`Average Salary` == max(`Average Salary`)) %>%
+  kable(caption = "Summary of Results")
+```
+
+```{r table6, echo = FALSE}
+table6
+```
+
+
+## A Note on Interpretation
+It is important to realize that the information from the data is not indicative of current salaries since this survey published in 2010. Though it is likely that the rank of the majors and the schools would not drastically, it would be interesting to investigate the impact the pandemic has had on some of these figures.
+
+An important variable when choosing a major is the availability of work. Such parameters were not included in the data.
+
+Furthermore, there exists some skepticism when examining salaries by region. Cost of living (COL) is calculated by the amount of money needed to reside in a particular city. Places such as New York and California have much higher costs of living than, for example, states in the midwest. Since COL is a factor when negotiating salaries, there is a chance that results from the previous analysis are inflated.
+
+Lastly, a more cohesive rubric for picking majors and colleges could be constructed if a similar study were to be published in such a way that the salary information for majors was integrated into each of the individual schools. This would allow for a more exhaustive interpretation of the graphs above.
+
+## Future Work / Conclusion
+
+In conclusion, all three of the variables considered (school type, region, and major) proved to be significant features for determining salary. These conclusions were based off of exploratory analysis on the distributions of the variables. To summarize each finding:
+
+* If a student were looking to make the most money out of college, they should pursue a career as a physician's assistant, nursing, or any of the engineering majors (they also exhibit some of the best mid-career salaries).
+* When considering a long-term approach, the best areas of study go to math and philosophy, which show a percentage increase of over 100% from their entry-level to mid-career salaries. For highest potential salary, consider a career in finance or economics.  
+* If possible, college prospects should attend ivy league or engineering colleges. If not possible, state and liberal arts schools are also a wise choice given the major is as well. The worst performing colleges are party schools. If a student were to attend one of those, the best region to do so would be in California.
+* Schools in the northeast and California outperform schools in the other regions.
+
+For future work, it would be beneficial to construct an ANOVA test to determine if median salaries differ from majors, college types, and regions. In terms of machine learning, unsupervised learning techniques could be implemented to understand and discover patterns using association rules.
+
+Source code for the document may be found on github at <https://github.com/stephenodea54/Degrees-That-Pay-You-Back>.
+
+## Bibliography
