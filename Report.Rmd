@@ -1,5 +1,5 @@
 ---
-title: "Factors Affecting Salary"
+title: "Economic Factors for Choosing a Major"
 author: "Stephen O'Dea"
 date: "4/30/2021"
 output: pdf_document
