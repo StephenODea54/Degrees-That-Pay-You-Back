@@ -3,18 +3,25 @@ library(tidyverse)
 library(scales)
 library(RColorBrewer)
 library(ggthemes)
-library(maps)
-library(mapproj)
 
                     ### IMPORT DATA ###
-salary_by_major <- read_csv("C:/Users/campb/Desktop/degrees-that-pay-back.csv")
-salary_by_type <- read_csv("C:/Users/campb/Desktop/salaries-by-college-type.csv", 
-                                     col_types = cols(`Mid-Career 10th Percentile Salary` = col_double(), 
-                                                      `Mid-Career 90th Percentile Salary` = col_double()))
-salary_by_region <- read_csv("C:/Users/campb/Desktop/salaries-by-region.csv")
+salary_by_major <- read_csv(
+  "Data/degrees-that-pay-back.csv",
+  col_types = "fnnnnnnn"
+)
+
+salary_by_type <- read_csv(
+  "Data/salaries-by-college-type.csv",
+  col_types = "ffnnnnnn"
+)
+
+salary_by_region <- read_csv(
+  "Data/salaries-by-region.csv",
+  col_types = "ffnnnnnn"
+)
 
                     ### SET PROJECT THEME ###
-theme_set(theme_economist_white())
+theme_set(theme_bw())
 
                     ### STACKED BAR CHART ###
 salary_by_major %>%
@@ -28,7 +35,7 @@ salary_by_major %>%
   coord_flip() +
   scale_fill_brewer(palette = "Blues") +
   scale_y_continuous(labels = dollar_format()) +
-  labs(title = "College Degrees with the Highest Earnings Potential",
+  labs(title = "Degrees That Pay Back",
        x = "",
        y = "Salary (USD)",
        fill = "Salary Percentile") +
@@ -42,7 +49,7 @@ salary_by_major %>%
         panel.grid.minor = element_blank(),
         legend.position = "bottom")
 
-                    ### ERROR BAR CHART ###
+                    ### BOX PLOTS ###
 salary_by_type %>%
   arrange(desc(`Mid-Career Median Salary`)) %>%
   mutate(School = str_to_title(`School Name`),
@@ -63,19 +70,16 @@ salary_by_type %>%
   expand_limits(y = 50000) +
   scale_y_continuous(labels = dollar_format()) +
   coord_flip() +
-  labs(title = "Where It Pays to Attend School",
-       subtitle = "Top 20 Schools Aggregated by School Type",
+  labs(title = "Where It Pays To Attend School",
        x = "",
        y = "Salary (USD)") +
-  theme(plot.title = element_text(hjust = 0.5),
-        plot.subtitle = element_text(hjust = 0.5, margin = margin(0,0,15,0)),
-        axis.text.y = element_text(hjust = 0.95, vjust = 0.2),
+  theme(axis.text.y = element_text(hjust = 0.95, vjust = 0.2),
         axis.title.x = element_text(vjust = -0.5),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        legend.position = "bottom")
+        legend.position = "right")
 
-                    ### CHOROPLETH ###
+                    ### SCATTERPLOT ###
 # EXTRACT MAP DATA FROM GGPLOT
 us_map <- map_data("state") %>% as_tibble()
 
@@ -95,29 +99,51 @@ tmp <- data.frame(state = c("california", "illinois", "indiana", "iowa", "kansas
                              "Western", "Western", "Western", "Western", "Western", "Western", "Western", "Western")) %>% as_tibble()
 
 # WRANGLE SALARY_BY_REGION AND MERGE WITH TMP
-salary_by_region <- salary_by_region %>%
+salary_by_region1 <- salary_by_region %>%
   group_by(Region) %>%
   summarise(mid_career_median_salary = median(`Mid-Career Median Salary`))
 
-salary_by_region <- tmp %>%
-  left_join(salary_by_region, by = "Region")
-
-rm(tmp)
+salary_by_region1 <- tmp %>%
+  left_join(salary_by_region1, by = "Region")
 
 # MERGE SALARY_BY_REGION AND US_MAP
 salary_by_region_map <- us_map %>%
-  left_join(salary_by_region, by = c("region" = "state"))
+  left_join(salary_by_region1, by = c("region" = "state"))
 
 salary_by_region_map %>%
   ggplot(aes(long, lat, group = subregion)) +
   coord_map("ortho",
             orientation = c(39, -98, 0)) +
-  geom_polygon(aes(group = group, fill = mid_career_median_salary), color = "black") +
-  scale_color_brewer(palette = "Blues") +
+  geom_polygon(aes(group = group, fill = mid_career_median_salary, color = Region)) +
+  scale_fill_distiller(name = "Median Salary", palette = "Blues", labels = dollar_format(),
+                       breaks = c(77800, 80000, 88000, 91550)) +
   theme_minimal() +
-  labs(title = "Mid-Career Salaries",
-       x = "",
+  guides(color = guide_legend(override.aes = list(fill = "white")),
+         fill=guide_legend(byrow=TRUE)) +
+  labs(x = "",
        y = "",
        fill = "") +
   theme_map() +
-  theme(plot.title = element_text(size = 26, face = "bold", hjust = 0.5))
+  theme(legend.position="bottom",
+        legend.box="vertical",
+        legend.margin=margin(),
+        legend.justification = "center")
+
+                    ### GROUPED BAR CHART ###
+salary_by_region %>%
+  left_join(salary_by_type) %>%
+  drop_na() %>%
+  group_by(Region, `School Type`) %>%
+  summarise(mean = mean(`Mid-Career Median Salary`)) %>%
+  ggplot(aes(`School Type`, mean, fill = Region)) + 
+  geom_col(alpha = 0.8, position = 'dodge', color = "#000000") +
+  scale_fill_brewer(palette = 'Pastel1') +
+  coord_flip() +
+  scale_y_continuous(labels = dollar_format()) +
+  labs(subtitle = "Best Region for Each School Type",
+       y = "Salary (USD)") +
+  theme(axis.text.y = element_text(hjust = 0.95, vjust = 0.2),
+        axis.title.x = element_text(vjust = -0.5),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position = "right")
